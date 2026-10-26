@@ -33,6 +33,31 @@ const BLOB_SAS_URL = process.env.BLOB_SAS_URL || '';
 delete process.env.BLOB_SAS_URL;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 
+// ---- Ops Terminal sandbox bootstrap ----------------------------------------
+// Production: launch.js (root) spawned this server as an unprivileged uid and runs
+// commands for us over IPC as a separate sandbox uid. Dev: optional in-process mode.
+const ops = { mode: 'disabled', reason: 'no sandbox runner (start via launch.js as root with OPS_SANDBOX_UID)', info: null, limits: null, pending: new Map(), local: null };
+if (process.env.OPS_TERMINAL === '0') ops.reason = 'OPS_TERMINAL=0';
+else if (process.env.OPS_PARENT_RUNNER === '1' && process.send) {
+  ops.mode = 'starting';
+  process.on('message', m => {
+    if (m && m.type === 'ready') { ops.mode = 'runner'; ops.info = m.info; ops.limits = m.limits; ops.reason = null; console.log('ops runner ready:', JSON.stringify(m.info)); }
+    else if (m && m.type === 'result' && ops.pending.has(m.id)) { ops.pending.get(m.id)(m.result); ops.pending.delete(m.id); }
+  });
+  process.on('disconnect', () => { ops.mode = 'disabled'; ops.reason = 'runner disconnected'; process.exit(1); });
+  process.send({ type: 'hello' });
+} else if (process.env.OPS_ALLOW_SAME_UID === '1') {
+  // Dev only: commands run as THIS uid (reduced isolation, flagged in the UI).
+  ops.local = require('./ops/sandbox'); ops.mode = 'in-process (reduced isolation)'; ops.info = ops.local.info(); ops.limits = ops.local.LIMITS; ops.reason = null;
+}
+for (const k of ['OPS_PARENT_RUNNER', 'OPS_ALLOW_SAME_UID']) delete process.env[k];
+function opsRun(command, timeout) {
+  if (ops.local) return ops.local.run(command, timeout);
+  if (ops.mode !== 'runner') return Promise.resolve(null);
+  const id = crypto.randomBytes(8).toString('hex');
+  return new Promise(resolve => { ops.pending.set(id, resolve); process.send({ type: 'run', id, command, timeout }); });
+}
+
 // ---- storage (Azure Blob via container SAS, else local dir) ----------------
 function blobUrl(name, extra) {
   const u = new URL(BLOB_SAS_URL);
@@ -106,6 +131,10 @@ function validSession(req) {
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
   try { return JSON.parse(Buffer.from(p, 'base64url').toString()).exp > Date.now() / 1000; } catch { return false; }
 }
+function sessionId(req) {
+  const c = parseCookies(req.headers.cookie || '')[COOKIE] || '';
+  try { return JSON.parse(Buffer.from(c.split('.')[0], 'base64url').toString()).n || ''; } catch { return ''; }
+}
 function parseCookies(h) {
   const o = {};
   for (const part of h.split(';')) { const i = part.indexOf('='); if (i > 0) o[part.slice(0, i).trim()] = part.slice(i + 1).trim(); }
@@ -127,6 +156,23 @@ function limited(ip) {
   return f.length >= PER_IP || globalFails.length >= GLOBAL;
 }
 function recordFail(ip) { const now = Date.now(); fails.get(ip).push(now); globalFails.push(now); }
+
+// ---- Ops Terminal: audit + per-session rate limits ---------------------------
+const { createAudit } = require('./ops/audit');
+const { redact } = require('./ops/policy');
+const audit = createAudit(store);
+const OPS_RATE = { per_minute: 20, per_day: 400, queue_max: 4 };
+const opsHits = new Map(); // sid hash -> [timestamps ms] (last 24 h)
+let opsQueued = 0;
+const sidHash = n => crypto.createHash('sha256').update('ops-sid:' + n).digest('hex').slice(0, 12);
+function opsRateCheck(h) {
+  const now = Date.now();
+  const arr = (opsHits.get(h) || []).filter(t => now - t < 86400000); opsHits.set(h, arr);
+  if (arr.filter(t => now - t < 60000).length >= OPS_RATE.per_minute) return `rate limit: ${OPS_RATE.per_minute}/min per session`;
+  if (arr.length >= OPS_RATE.per_day) return `rate limit: ${OPS_RATE.per_day}/day per session`;
+  if (opsQueued >= OPS_RATE.queue_max) return 'busy: too many queued commands';
+  arr.push(now); return null;
+}
 
 // ---- http helpers -----------------------------------------------------------
 const SEC_HEADERS = {
@@ -152,6 +198,8 @@ const STATIC = {
   '/static/app.css': ['app.css', 'text/css', true],
   '/static/app.js': ['app.js', 'application/javascript', true],
   '/static/favicon.svg': ['favicon.svg', 'image/svg+xml', false],
+  '/static/terminal.js': ['terminal.js', 'application/javascript', true],
+  '/static/ops-usage.js': ['ops-usage.js', 'application/javascript', true],
 };
 function loginPage(msg) {
   return fs.readFileSync(path.join(PUB, 'login.html'), 'utf8').replace('{{MSG}}', msg ? `<p class="err" role="alert">${msg}</p>` : '');
@@ -209,6 +257,39 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { latest, history: days.map(d => ({ day: d, snapshot: history.get(d) })) });
     }
     if (p === '/' && req.method === 'GET') return send(res, 200, fs.readFileSync(path.join(PUB, 'index.html')));
+    if (p === '/terminal' && req.method === 'GET') return send(res, 200, fs.readFileSync(path.join(PUB, 'terminal.html')));
+    if (p === '/api/ops/exec' && req.method === 'POST') {
+      // CSRF: SameSite=Strict cookie + JSON content type + custom header (not settable cross-site without CORS).
+      if (!/^application\/json\b/.test(req.headers['content-type'] || '') || req.headers['x-artemis-ops'] !== '1') return json(res, 400, { error: 'send JSON with header X-Artemis-Ops: 1' });
+      let body; try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: 'invalid json' }); }
+      const command = body && typeof body.command === 'string' ? body.command : '';
+      const timeout = body && Number.isFinite(body.timeout) ? body.timeout : undefined;
+      const sh = sidHash(sessionId(req));
+      // Optional agent bookkeeping (idea from the agent_runs / command_logs schema): a run id
+      // groups an agent's commands; token counts are caller-reported and logged only if sent.
+      const runId = body && typeof body.run_id === 'string' && /^[A-Za-z0-9._:-]{1,64}$/.test(body.run_id) ? body.run_id : null;
+      const tok = k => (body && Number.isInteger(body[k]) && body[k] >= 0 && body[k] < 1e9 ? body[k] : null);
+      const base = { sid: sh, run_id: runId, command: redact(command).slice(0, 500), timeout_ms: timeout ?? null, tokens_in: tok('tokens_in'), tokens_out: tok('tokens_out') };
+      if (!command.trim()) return json(res, 400, { error: 'command is required' });
+      const rl = opsRateCheck(sh);
+      if (rl) {
+        audit.record({ ...base, status: 'rate_limited', exit_code: null, duration_ms: 0, bytes_out: 0, timed_out: false, truncated: false, blocked: rl });
+        return json(res, 429, { error: rl, stdout: '', stderr: '', exit_code: null, duration_ms: 0, timed_out: false, truncated: false, blocked: rl });
+      }
+      opsQueued++;
+      let r; try { r = await opsRun(command, timeout); } finally { opsQueued--; }
+      if (!r) {
+        audit.record({ ...base, status: 'unavailable', exit_code: null, duration_ms: 0, bytes_out: 0, timed_out: false, truncated: false, blocked: 'sandbox unavailable: ' + ops.reason });
+        return json(res, 503, { error: 'sandbox unavailable', detail: ops.reason });
+      }
+      const status = r.blocked ? 'blocked' : r.timed_out ? 'timeout' : r.exit_code === 0 ? 'ok' : 'failed';
+      audit.record({ ...base, status, exit_code: r.exit_code, duration_ms: r.duration_ms, bytes_out: (r.stdout_bytes || 0) + (r.stderr_bytes || 0), stdout_bytes: r.stdout_bytes || 0, stderr_bytes: r.stderr_bytes || 0, cpu_user_ms: r.cpu_user_ms ?? null, cpu_sys_ms: r.cpu_sys_ms ?? null, timed_out: r.timed_out, truncated: r.truncated, blocked: r.blocked });
+      return json(res, r.blocked ? 403 : 200, { stdout: r.stdout, stderr: r.stderr, exit_code: r.exit_code, duration_ms: r.duration_ms, timed_out: r.timed_out, truncated: r.truncated, blocked: r.blocked, run_id: runId, stdout_bytes: r.stdout_bytes || 0, stderr_bytes: r.stderr_bytes || 0, cpu_user_ms: r.cpu_user_ms ?? null, cpu_sys_ms: r.cpu_sys_ms ?? null });
+    }
+    if (p === '/api/ops/usage' && req.method === 'GET') {
+      const days = Math.max(1, Math.min(30, parseInt(url.searchParams.get('days') || '14', 10) || 14));
+      return json(res, 200, { ...audit.usage(days, 50), sandbox: { mode: ops.mode, reason: ops.reason, isolation: ops.info, limits: ops.limits }, rate_limits: OPS_RATE, you: sidHash(sessionId(req)) });
+    }
     return send(res, 404, 'not found', 'text/plain');
   } catch (e) {
     console.error('request error:', e.message);
@@ -216,4 +297,5 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-loadState().then(() => server.listen(PORT, () => console.log(`artemis-dashboard listening on :${PORT} (storage=${BLOB_SAS_URL ? 'blob' : 'local'})`)));
+process.on('SIGTERM', async () => { try { await audit.flushNow(); } catch {} process.exit(0); });
+Promise.all([loadState(), audit.load()]).then(() => server.listen(PORT, () => console.log(`artemis-dashboard listening on :${PORT} (storage=${BLOB_SAS_URL ? 'blob' : 'local'}, ops=${ops.mode})`)));

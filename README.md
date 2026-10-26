@@ -13,6 +13,10 @@ Live at: https://admin.artemisstatistics.artemisai-bycutlineindustries.studio (A
   - Strict CSP (no inline script or style), HSTS, DENY framing, `no-store`.
   - Storage is Azure Blob, through a container SAS (`BLOB_SAS_URL`): `latest.json` plus `day-YYYY-MM-DD.json` (ET), keeping the last 30 days. Without `BLOB_SAS_URL`, it writes to the local `data/` folder.
 - `public/`: login page and dashboard (vanilla JS, SVG charts, no CDN).
+- **Ops Terminal** (`/terminal`, `/api/ops/exec`, `/api/ops/usage`). See OPS_TERMINAL.md. It is a sandboxed shell API with an audit log and a usage panel.
+  - `launch.js` is the container entrypoint: root runner, server as uid 1000, sandbox as uid 10001.
+  - `ops/` holds the policy, sandbox and audit code.
+  - `sdk/artemis_ops.py` is the Python agent client.
 - `push.sh`: runs `/workspace/artemis-dashboard/collect.py`, refuses to push anything that looks like a secret, then POSTs the snapshot.
   - It reads `.ingest_token` (chmod 600, gitignored) and `.dashboard_url`.
 

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Artemis Dashboard · Ops Terminal</title>
+<link rel="icon" href="/static/favicon.svg"><link rel="stylesheet" href="/static/app.css"></head>
+<body><div class="stars" aria-hidden="true"></div>
+<header class="top">
+  <div class="brand"><svg class="arc" viewBox="0 0 120 34" aria-hidden="true"><path d="M4 32 A60 60 0 0 1 116 32"/><circle cx="96" cy="10" r="2"/></svg>
+    <div><div class="title">ARTEMIS <span>OPS TERMINAL</span></div><div class="by">Cutline Industries LLC</div></div></div>
+  <nav class="nav" aria-label="Sections"><a href="/">Dashboard</a><a href="/terminal" aria-current="page">Ops Terminal</a></nav>
+  <div class="asof"><span class="live" id="sbLive" aria-hidden="true"></span><span>Sandbox</span> <strong id="sbMode">—</strong></div>
+  <form method="post" action="/logout"><button class="logout" type="submit">Log out</button></form>
+</header>
+<main class="grid">
+  <section class="p c8 term" aria-label="Terminal">
+    <h2>Sandboxed shell<small id="termSub">each command runs in a fresh, throwaway sandbox</small></h2>
+    <div id="out" class="tout" role="log" aria-live="polite" tabindex="0"><div class="mut">Commands run one at a time as an unprivileged user in an empty temp dir that is deleted afterwards. Files do not persist between commands. Try <code>uname -a</code>, <code>ls -la /</code> or <code>echo hi | wc -c</code>.</div></div>
+    <form id="tform" class="tin" autocomplete="off">
+      <label for="cmd" class="prompt">sandbox:~$</label>
+      <input id="cmd" name="command" spellcheck="false" maxlength="2000" placeholder="type a command, Enter to run (↑/↓ history)" autofocus>
+      <label class="sr" for="tmo">Timeout</label>
+      <select id="tmo" aria-label="Timeout"><option value="5000" selected>5 s</option><option value="10000">10 s</option><option value="30000">30 s</option></select>
+      <button type="submit" id="runBtn">Run</button>
+    </form>
+  </section>
+  <section class="p c4" aria-label="Sandbox limits"><h2>Sandbox &amp; limits<small>live from the server</small></h2><div id="limits" class="mut">Loading…</div></section>
+  <div id="opsUsage" class="c12 subgrid"></div>
+</main>
+<footer class="foot mut">Every command, including blocked ones, is written to the audit log in private blob storage (session shown as a hash). Durations are measured on the server. Not a security boundary for untrusted users: see OPS_TERMINAL.md.</footer>
+<script src="/static/terminal.js"></script><script src="/static/ops-usage.js"></script></body></html>

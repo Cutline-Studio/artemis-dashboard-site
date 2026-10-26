@@ -6,10 +6,11 @@
 <header class="top">
   <div class="brand"><svg class="arc" viewBox="0 0 120 34" aria-hidden="true"><path d="M4 32 A60 60 0 0 1 116 32"/><circle cx="96" cy="10" r="2"/></svg>
     <div><div class="title">ARTEMIS <span>OPS TERMINAL</span></div><div class="by">Cutline Industries LLC</div></div></div>
+  <nav class="nav" aria-label="Sections"><a href="/" aria-current="page">Dashboard</a><a href="/terminal">Ops Terminal</a></nav>
   <div class="asof"><span class="live" aria-hidden="true"></span><span>As of</span> <strong id="asof">—</strong> <span id="age" class="mut"></span></div>
   <form method="post" action="/logout"><button class="logout" type="submit">Log out</button></form>
 </header>
 <div class="ticker" role="marquee" aria-label="Key stats ticker"><div class="track" id="ticker"></div></div>
 <main id="main" class="grid" aria-live="polite"><p class="mut pad">Loading snapshot…</p></main>
 <footer class="foot mut">Real data only, pushed from the Artemis box. Values marked <em>est.</em> are estimates. Deltas compare with the previous day's snapshot.</footer>
-<script src="/static/app.js"></script></body></html>
+<script src="/static/app.js"></script><script src="/static/ops-usage.js"></script></body></html>

@@ -7,3 +7,6 @@ data/
 preview.png
 .test_pw
 .dashboard_url
+docs/reference/
+ops-terminal-*.png
+__pycache__/
