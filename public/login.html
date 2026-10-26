@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Artemis Dashboard · Sign in</title>
+<link rel="icon" href="/static/favicon.svg"><link rel="stylesheet" href="/static/login.css"></head>
+<body><div class="stars" aria-hidden="true"></div>
+<main class="card">
+  <svg class="arc" viewBox="0 0 200 60" aria-hidden="true"><path d="M8 56 A100 100 0 0 1 192 56" /></svg>
+  <h1><span class="mark">ARTEMIS</span> <span class="sub">OPS TERMINAL</span></h1>
+  <p class="by">Cutline Industries LLC · private dashboard</p>
+  {{MSG}}
+  <form method="post" action="/login" autocomplete="on">
+    <label for="pw">Password</label>
+    <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">Sign in</button>
+  </form>
+</main></body></html>

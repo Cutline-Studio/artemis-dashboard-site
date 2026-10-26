@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Artemis Dashboard</title>
+<link rel="icon" href="/static/favicon.svg"><link rel="stylesheet" href="/static/app.css"></head>
+<body><div class="stars" aria-hidden="true"></div>
+<header class="top">
+  <div class="brand"><svg class="arc" viewBox="0 0 120 34" aria-hidden="true"><path d="M4 32 A60 60 0 0 1 116 32"/><circle cx="96" cy="10" r="2"/></svg>
+    <div><div class="title">ARTEMIS <span>OPS TERMINAL</span></div><div class="by">Cutline Industries LLC</div></div></div>
+  <div class="asof"><span class="live" aria-hidden="true"></span><span>As of</span> <strong id="asof">—</strong> <span id="age" class="mut"></span></div>
+  <form method="post" action="/logout"><button class="logout" type="submit">Log out</button></form>
+</header>
+<div class="ticker" role="marquee" aria-label="Key stats ticker"><div class="track" id="ticker"></div></div>
+<main id="main" class="grid" aria-live="polite"><p class="mut pad">Loading snapshot…</p></main>
+<footer class="foot mut">Real data only, pushed from the Artemis box. Values marked <em>est.</em> are estimates. Deltas compare with the previous day's snapshot.</footer>
+<script src="/static/app.js"></script></body></html>

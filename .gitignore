@@ -1,0 +1,9 @@
+node_modules/
+.ingest_token
+.session_secret
+.env
+data/
+*.log
+preview.png
+.test_pw
+.dashboard_url
