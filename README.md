@@ -1,7 +1,7 @@
 # Artemis Dashboard
 
 Password-protected, trading-terminal-style ops dashboard for Artemis (Cutline Industries LLC).
-Target domain: `dashboard.artemisai-bycutlineindustries.studio` (Azure Container Apps).
+Live at: https://admin.artemisstatistics.artemisai-bycutlineindustries.studio (Azure Container Apps `ca-artemis-dashboard`, managed cert).
 
 ## Pieces
 - `server.js`: Node 20 `http` server. Only dependency: `bcryptjs`.

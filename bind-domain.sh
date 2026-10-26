@@ -46,7 +46,7 @@ for i in $(seq 1 20); do
   api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://$HOST/api/snapshot" || true)
   if [ "$login" = 200 ] && grep -q 'ARTEMIS' /tmp/bind-login.html && [ "$api" = 401 ]; then
     echo "OK: https://$HOST/login -> 200 (login page), /api/snapshot unauthenticated -> 401"
-    echo | openssl s_client -connect "$HOST:443" -servername "$HOST" 2>/dev/null | openssl x509 -noout -subject -issuer -enddate 2>/dev/null || true
+    echo | timeout 15 openssl s_client -connect "$HOST:443" -servername "$HOST" 2>/dev/null | openssl x509 -noout -subject -issuer -enddate 2>/dev/null || true
     exit 0
   fi
   echo "  attempt $i: login=$login api=$api; retrying in 30s"; sleep 30
